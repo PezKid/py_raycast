@@ -21,7 +21,7 @@ map = [
     ['1','1','1','0','0','0','0','1'],
     ['1','0','0','0','0','0','0','1'],
     ['1','0','0','0','0','1','0','1'],
-    ['1','0','0','0','0','1','0','1'],
+    ['1','0','1','0','0','1','0','1'],
     ['1','0','0','0','0','0','0','1'],
     ['1','1','1','1','1','1','1','1'],
 ]
@@ -39,27 +39,24 @@ class Player:
         self.rotation = rotation # rotation in radians [0,2pi)
         self.rotation_speed = rotation_speed
 
-    def move_forward(self):
-        dx = self.move_speed * math.cos(self.rotation)
-        dy = self.move_speed * math.sin(self.rotation)
+    def move(self, sign):
+        if sign not in [1, -1]:
+            raise ValueError("sign must be 1 or -1")
+
+        dx = self.move_speed * math.cos(self.rotation) * sign
+        dy = self.move_speed * math.sin(self.rotation) * sign
+        grid_x = int((self.x + 1.5 * dx) / 64) # collision detection
+        grid_y = int((self.y + 1.5 * dy) / 64)
+        if (map[grid_y][grid_x] == '1'):
+            return
         self.x += dx
         self.y += dy
 
-    def move_backward(self):
-        dx = self.move_speed * math.cos(self.rotation)
-        dy = self.move_speed * math.sin(self.rotation)
-        self.x -= dx
-        self.y -= dy
+    def turn(self, sign):
+        if sign not in [1, -1]:
+            raise ValueError("sign must be 1 or -1")
 
-    def turn_left(self):
-        self.rotation -= self.rotation_speed
-        if self.rotation < 0:
-            self.rotation += 2 * math.pi
-        if self.rotation > 2 * math.pi:
-            self.rotation -= 2 * math.pi
-
-    def turn_right(self):
-        self.rotation += self.rotation_speed
+        self.rotation += self.rotation_speed * sign
         if self.rotation < 0:
             self.rotation += 2 * math.pi
         if self.rotation > 2 * math.pi:
@@ -73,7 +70,7 @@ class Player:
 
     def draw_rays(self):
         distances = []
-        for i in range(-10, 10):
+        for i in range(-30, 30):
             dtheta = i * math.pi / 180
             theta = self.rotation + dtheta
             if theta > 2 * math.pi:
@@ -198,18 +195,18 @@ while playing:
     keys = pygame.key.get_pressed()  # checking pressed keys
 
     if keys[pygame.K_w]:
-        player.move_forward()
+        player.move(1)
     if keys[pygame.K_s]:
-        player.move_backward()
+        player.move(-1)
     if keys[pygame.K_a]:
-        player.turn_left()
+        player.turn(-1)
     if keys[pygame.K_d]:
-        player.turn_right()
+        player.turn(1)
 
     # Draw screen, map, and player
     screen.fill(BG_COLOR)
     draw_map()
-    player.draw_rays()
+    print(player.draw_rays())
     player.draw()
 
     # Update display
