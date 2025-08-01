@@ -4,7 +4,9 @@ import math
 # Initialize pygame
 pygame.init()
 pygame.display.set_caption("Raycast")
-SCREEN_DIM = SCREEN_WIDTH, SCREEN_HEIGHT = 512*2, 512
+
+fov_var = 2.5
+SCREEN_DIM = SCREEN_WIDTH, SCREEN_HEIGHT = 512*fov_var, 512
 screen = pygame.display.set_mode(SCREEN_DIM)
 clock = pygame.time.Clock()
 
@@ -29,6 +31,32 @@ map = [
 map_width, map_height = len(map[0]), len(map)
 gridline_width = 1 # map square offset, adds negative space background outline around blocks
 sq = 64 # square dimensions
+
+# Textures
+textures = [
+    [
+        ['1','1','1','1','0','0','1','1'],
+        ['1','1','1','1','0','1','0','0'],
+        ['1','0','0','0','1','1','1','0'],
+        ['0','1','1','0','1','1','1','1'],
+        ['0','1','1','0','1','1','1','1'],
+        ['0','1','1','0','0','0','0','1'],
+        ['0','1','0','0','1','1','1','0'],
+        ['1','0','0','1','1','1','1','1']
+    ],
+    [
+        ['1','1','1','1','1','1','0','1'],
+        ['1','1','1','1','1','1','0','1'],
+        ['1','1','1','1','1','1','0','1'],
+        ['0','0','0','0','0','0','0','0'],
+        ['1','1','0','1','1','1','1','1'],
+        ['1','1','0','1','1','1','1','1'],
+        ['1','1','0','1','1','1','1','1'],
+        ['0','0','0','0','0','0','0','0']
+    ],
+]
+
+x_resolution = 128
 
 # Set up player class
 class Player:
@@ -71,8 +99,9 @@ class Player:
 
     def draw_rays(self):
         distances = []
-        for i in range(-32, 32):
-            dtheta = i * math.pi / 180
+        half_range = int(x_resolution / 2)
+        for i in range(-half_range, half_range):
+            dtheta = 1.7 * i * math.pi / 180 * (64 / x_resolution)
             theta = self.rotation + dtheta
             if theta > 2 * math.pi:
                 theta -= 2 * math.pi
@@ -141,13 +170,13 @@ class Player:
                 side = 'H'
                 map = map_at_ray(h_rayloc)
                 color = map_to_color(side, map)
-                distances.append((h_dist, side, map))
+                distances.append((h_dist, side, map, h_rayloc, self.rotation))
             else:
                 rx, ry = v_rayloc
                 side = 'V'
                 map = map_at_ray(v_rayloc)
                 color = map_to_color(side, map)
-                distances.append((v_dist, side, map))
+                distances.append((v_dist, side, map, v_rayloc, self.rotation))
 
             pygame.draw.line(screen, color, (self.x, self.y), (rx, ry), 2)
 
@@ -189,15 +218,46 @@ def draw_map():
 
 def draw_3d(rays):
     start_x, start_y = 0, 0
+    ivar = (SCREEN_WIDTH - 512) / 128
     for i, ray_info in enumerate(rays):
-        start_x = 512 + i * 8
-        start_y = 0
-        dist, side, map_type = ray_info
-        color = map_to_color(side, map_type)
+        start_x = 512 + i * ivar
+        dist, side, map_type, rayloc, rot = ray_info
+        rx, ry = rayloc
 
-        slice_height = 64 * SCREEN_HEIGHT / dist
+        height_scalar = 0.5
+        slice_height = 64 * SCREEN_HEIGHT / dist * height_scalar
         start_y = SCREEN_HEIGHT / 2 - slice_height / 2
-        pygame.draw.rect(screen, color, (start_x, start_y, 8, slice_height))
+        y_slice = slice_height / 8
+
+        if side == "V":
+            tx = math.floor(rx % 64 / 8)
+            if rot > math.pi:
+                tx = 7 - tx
+        elif side == "H":
+            tx = math.floor(ry % 64 / 8)
+            if rot < math.pi / 2 or rot > 3 * math.pi / 2:
+                tx = 7 - tx
+        for ty in range(8):
+            color = get_pixel_color(map_type, side, (tx, ty))
+            pygame.draw.rect(screen, color, (start_x, start_y, ivar, y_slice+1))
+            start_y += y_slice
+
+def get_pixel_color(map_type, side, texture_loc):
+    tx, ty = texture_loc
+    color = map_to_color(side, map_type)
+    if map_type == '1':
+        pixel_loc = textures[0][ty][tx]
+        if pixel_loc == '0':
+            color = color_shift(color, 0.8)
+        elif pixel_loc == '1':
+            color = color_shift(color, 1.2)
+    elif map_type == '2':
+        pixel_loc = textures[1][ty][tx]
+        if pixel_loc == '0':
+            color = color_shift(color, 0.8)
+        elif pixel_loc == '1':
+            color = color_shift(color, 1.2)
+    return color
 
 def map_to_color(side, map_type):
     color = (0, 0, 0)
@@ -209,17 +269,17 @@ def map_to_color(side, map_type):
     if side == "M":
         return color
     elif side == "H":
-        r, g, b = color
-        r = min(r * 1.1, 255)
-        g = min(g * 1.1, 255)
-        b = min(b * 1.1, 255)
-        color = (r, g, b)
+        color = color_shift(color, 1.1)
     elif side == "V":
-        r, g, b = color
-        r *= 0.9
-        g *= 0.9
-        b *= 0.9
-        color = (r, g, b)
+        color = color_shift(color, 0.9)
+    return color
+
+def color_shift(color, scalar):
+    r, g, b = color
+    r = min(r * scalar, 255)
+    g = min(g * scalar, 255)
+    b = min(b * scalar, 255)
+    color = (r, g, b)
     return color
 
 # Initialize player
