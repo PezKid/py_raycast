@@ -16,19 +16,20 @@ GRID_COLOR = (100, 100, 100) # light gray
 BG_COLOR = (73, 82, 76)
 ONE_COLOR = (121, 128, 123)
 TWO_COLOR = (173, 136, 61)
+THREE_COLOR = (173, 111, 49)
 
 # Set up map
-map = [
+map_walls = [
     ['1','1','1','1','1','1','1','1'],
     ['1','0','0','0','0','0','0','1'],
-    ['1','2','2','0','0','0','0','1'],
-    ['1','0','0','0','0','0','0','1'],
-    ['1','0','0','0','0','2','0','1'],
-    ['1','0','2','0','0','2','0','1'],
+    ['1','2','2','2','0','0','0','1'],
+    ['1','0','0','2','2','0','0','1'],
+    ['1','0','0','0','2','2','0','1'],
+    ['1','0','2','0','0','2','3','3'],
     ['1','0','0','0','0','0','0','1'],
     ['1','1','1','1','1','1','1','1'],
 ]
-map_width, map_height = len(map[0]), len(map)
+map_width, map_height = len(map_walls[0]), len(map_walls)
 gridline_width = 1 # map square offset, adds negative space background outline around blocks
 sq = 64 # square dimensions
 
@@ -54,6 +55,16 @@ textures = [
         ['1','1','0','1','1','1','1','1'],
         ['0','0','0','0','0','0','0','0']
     ],
+    [
+        ['1','0','1','1','1','1','0','1'],
+        ['1','0','1','1','1','1','0','1'],
+        ['1','0','1','1','1','1','0','1'],
+        ['1','0','1','0','1','1','0','1'],
+        ['1','0','1','0','1','1','0','1'],
+        ['1','0','1','1','1','1','0','1'],
+        ['1','0','1','1','1','1','0','1'],
+        ['1','0','1','1','1','1','0','1']
+    ],
 ]
 
 x_resolution = 128
@@ -76,7 +87,7 @@ class Player:
         dy = self.move_speed * math.sin(self.rotation) * sign
         grid_x = int((self.x + 1.5 * dx) / 64) # collision detection
         grid_y = int((self.y + 1.5 * dy) / 64)
-        if (map[grid_y][grid_x] != '0'):
+        if (map_walls[grid_y][grid_x] != '0'):
             return
         self.x += dx
         self.y += dy
@@ -96,6 +107,14 @@ class Player:
         dx = self.radius * 1.5 * math.cos(self.rotation)
         dy = self.radius * 1.5 * math.sin(self.rotation)
         pygame.draw.line(screen, PLAYER_COLOR, (self.x, self.y), (self.x + dx, self.y + dy), 3)
+
+    def interact(self)
+        dx = self.radius * 8 * math.cos(self.rotation)
+        dy = self.radius * 8 * math.sin(self.rotation)
+        sx, sy = map_at_ray((self.x + dx, self.y + dy))
+        map_wall = map_walls[sy][sx]
+        if map_wall == '3':
+            map_walls[sy][sx] = '0'
 
     def draw_rays(self):
         distances = []
@@ -168,30 +187,33 @@ class Player:
             if h_dist < v_dist:
                 rx, ry = h_rayloc
                 side = 'H'
-                map = map_at_ray(h_rayloc)
-                color = map_to_color(side, map)
-                distances.append((h_dist, side, map, h_rayloc, self.rotation))
+                sx, sy = map_at_ray(h_rayloc)
+                map_block = map_walls[sy][sx]
+                color = map_to_color(side, map_block)
+                distances.append((h_dist, side, map_block, h_rayloc, self.rotation))
             else:
                 rx, ry = v_rayloc
                 side = 'V'
-                map = map_at_ray(v_rayloc)
-                color = map_to_color(side, map)
-                distances.append((v_dist, side, map, v_rayloc, self.rotation))
+                sx, sy = map_at_ray(v_rayloc)
+                map_block = map_walls[sy][sx]
+                color = map_to_color(side, map_block)
+                distances.append((v_dist, side, map_block, v_rayloc, self.rotation))
 
             pygame.draw.line(screen, color, (self.x, self.y), (rx, ry), 2)
 
         return distances
 
     def ray_in_wall(self, ray):
-        return map_at_ray(ray) != '0'
+        sx, sy = map_at_ray(ray)
+        return map_walls[sy][sx] != '0'
 
 def map_at_ray(ray):
     rx, ry = ray
     sx = int(rx / sq)
     sy = int(ry / sq)
     if sx > 7 or sx < 0 or sy > 7 or sy < 0:
-        return None
-    return map[sy][sx]
+        return (0, 0)
+    return (sx, sy)
 
 # Draws map on screen from variable map where value == 1
 def draw_map():
@@ -203,8 +225,8 @@ def draw_map():
             start_y = h * sq
 
             # If map position != 0, draw rect
-            if map[h][w] != '0':
-                pygame.draw.rect(screen, map_to_color('M', map[h][w]), (start_x, start_y, sq, sq))
+            if map_walls[h][w] != '0':
+                pygame.draw.rect(screen, map_to_color('M', map_walls[h][w]), (start_x, start_y, sq, sq))
 
             top_left = (start_x, start_y)
             top_right = (start_x + sq, start_y)
@@ -231,11 +253,11 @@ def draw_3d(rays):
 
         if side == "V":
             tx = math.floor(rx % 64 / 8)
-            if rot > math.pi:
+            if rot < math.pi:
                 tx = 7 - tx
         elif side == "H":
             tx = math.floor(ry % 64 / 8)
-            if rot < math.pi / 2 or rot > 3 * math.pi / 2:
+            if rot > math.pi / 2 and rot < 3 * math.pi / 2:
                 tx = 7 - tx
         for ty in range(8):
             color = get_pixel_color(map_type, side, (tx, ty))
@@ -245,14 +267,8 @@ def draw_3d(rays):
 def get_pixel_color(map_type, side, texture_loc):
     tx, ty = texture_loc
     color = map_to_color(side, map_type)
-    if map_type == '1':
-        pixel_loc = textures[0][ty][tx]
-        if pixel_loc == '0':
-            color = color_shift(color, 0.8)
-        elif pixel_loc == '1':
-            color = color_shift(color, 1.2)
-    elif map_type == '2':
-        pixel_loc = textures[1][ty][tx]
+    if map_type in ['1', '2', '3']:
+        pixel_loc = textures[int(map_type)-1][ty][tx]
         if pixel_loc == '0':
             color = color_shift(color, 0.8)
         elif pixel_loc == '1':
@@ -265,6 +281,8 @@ def map_to_color(side, map_type):
         color = ONE_COLOR
     elif map_type == '2':
         color = TWO_COLOR
+    elif map_type == '3':
+        color = THREE_COLOR
 
     if side == "M":
         return color
@@ -306,6 +324,8 @@ while playing:
         player.turn(-1)
     if keys[pygame.K_d]:
         player.turn(1)
+    if keys[pygame.K_e]:
+        player.interact()
 
     # Draw screen, map, and player
     screen.fill(BG_COLOR)
